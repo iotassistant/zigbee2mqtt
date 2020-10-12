@@ -27,7 +27,8 @@ describe('Availability', () => {
         settings._reRead();
         data.writeEmptyState();
         jest.useFakeTimers();
-        settings.set(['advanced', 'availability_timeout'], 10)
+        settings.set(['advanced', 'availability_timeout'], 10);
+        settings.set(['experimental', 'new_api'], true);
         controller = new Controller();
         mocksClear.forEach((m) => m.mockClear());
         await controller.start();
@@ -197,7 +198,21 @@ describe('Availability', () => {
         expect(MQTT.publish.mock.calls.find((c) => c[0].includes('availability'))).toBeUndefined();
     });
 
-    it('Should not ping devices blacklisted by friendly name', async () => {
+    it('Should not ping devices on blocklist by friendly name', async () => {
+        const device = zigbeeHerdsman.devices.bulb_color;
+        settings.set(['advanced', 'availability_blocklist'], ['bulb_color'])
+        await controller.stop();
+        await flushPromises();
+        controller = new Controller();
+        await controller.start();
+        await flushPromises();
+        device.ping.mockClear();
+        jest.advanceTimersByTime(11 * 1000);
+        await flushPromises();
+        expect(device.ping).toHaveBeenCalledTimes(0);
+    });
+
+    it('Should not ping devices on blacklist by friendly name', async () => {
         const device = zigbeeHerdsman.devices.bulb_color;
         settings.set(['advanced', 'availability_blacklist'], ['bulb_color'])
         await controller.stop();
@@ -211,9 +226,9 @@ describe('Availability', () => {
         expect(device.ping).toHaveBeenCalledTimes(0);
     });
 
-    it('Should not ping devices blacklisted by IEEE address', async () => {
+    it('Should not ping devices on blocklist by IEEE address', async () => {
         const device = zigbeeHerdsman.devices.bulb_color;
-        settings.set(['advanced', 'availability_blacklist'], [device.ieeeAddr]);
+        settings.set(['advanced', 'availability_blocklist'], [device.ieeeAddr]);
         await controller.stop();
         await flushPromises();
         controller = new Controller();
@@ -238,7 +253,21 @@ describe('Availability', () => {
         expect(device.ping).toHaveBeenCalledTimes(1);
     });
 
-    it('Should ping devices whitelisted by friendly name if availability_whitelist is set', async () => {
+    it('Should ping devices on passlist by friendly name if availability_passlist is set', async () => {
+        const device = zigbeeHerdsman.devices.bulb_color;
+        settings.set(['advanced', 'availability_passlist'], ['bulb_color']);
+        await controller.stop();
+        await flushPromises();
+        controller = new Controller();
+        await controller.start();
+        await flushPromises();
+        device.ping.mockClear();
+        jest.advanceTimersByTime(11 * 1000);
+        await flushPromises();
+        expect(device.ping).toHaveBeenCalledTimes(1);
+    });
+
+    it('Should ping devices on whitelist by friendly name if availability_whitelist is set', async () => {
         const device = zigbeeHerdsman.devices.bulb_color;
         settings.set(['advanced', 'availability_whitelist'], ['bulb_color']);
         await controller.stop();
@@ -252,9 +281,9 @@ describe('Availability', () => {
         expect(device.ping).toHaveBeenCalledTimes(1);
     });
 
-    it('Should ping devices whitelisted by IEEE address if availability_whitelist is set', async () => {
+    it('Should ping devices on passlist by IEEE address if availability_passlist is set', async () => {
         const device = zigbeeHerdsman.devices.bulb_color;
-        settings.set(['advanced', 'availability_whitelist'], [device.ieeeAddr]);
+        settings.set(['advanced', 'availability_passlist'], [device.ieeeAddr]);
         await controller.stop();
         await flushPromises();
         controller = new Controller();
@@ -266,10 +295,10 @@ describe('Availability', () => {
         expect(device.ping).toHaveBeenCalledTimes(1);
     });
 
-    it('Should not ping non-whitelisted devices if availability_whitelist is set', async () => {
+    it('Should not ping devices not in passlist if availability_passlist is set', async () => {
         const device = zigbeeHerdsman.devices.bulb;
         getExtension().state[device.ieeeAddr] = false;
-        settings.set(['advanced', 'availability_whitelist'], ['0x000b57fffec6a5b3'])
+        settings.set(['advanced', 'availability_passlist'], ['0x000b57fffec6a5b3'])
         await controller.stop();
         await flushPromises();
         controller = new Controller();
@@ -351,5 +380,33 @@ describe('Availability', () => {
         expect(MQTT.publish).toHaveBeenCalledTimes(1);
 
         device.lastSeen = defaultLastSeen;
+    });
+
+    it('Should republish existing state on MQTT connected', async () => {
+        const device = zigbeeHerdsman.devices.bulb_color;
+        await controller.stop();
+        await flushPromises();
+        MQTT.publish.mockClear();
+        controller = new Controller();
+        getExtension().state[device.ieeeAddr] = false;
+        await controller.start();
+        await flushPromises();
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            'zigbee2mqtt/bulb_color/availability',
+          'offline',
+          { retain: true, qos: 0 },
+          expect.any(Function)
+        );
+    });
+
+    it('Should clear retained availability topic when device is remove', async () => {
+        MQTT.publish.mockClear();
+        MQTT.events.message('zigbee2mqtt/bridge/request/device/remove', 'bulb_color');
+        await flushPromises();
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            'zigbee2mqtt/bulb_color/availability',
+            null,
+            {retain: true, qos: 0}, expect.any(Function)
+        );
     });
 });
