@@ -24,12 +24,12 @@ devices:
     friendly_name: ikea_power_switch
     retain: false
   '0x00158d00036b87ef':
-    friendly_name: aqara_temp_sensor
+    friendly_name: outside_temp
     retain: false
     calibration:
       humidity: -3
   '0x00158d0002706182':
-    friendly_name: aqara_door_sensor
+    friendly_name: door_sensor
     retain: false
   '0x00158d00039e21c6':
     friendly_name: aqara_power_switch
@@ -42,27 +42,27 @@ devices:
   '0xec1bbdfffeb086bb':
     friendly_name: lidl_switch
   '0x00158d0001d728dd':
-    friendly_name: temp_kitchen
+    friendly_name: storage_temp
   '0x00158d0001dc32c9':
-    friendly_name: temp_bathroom
+    friendly_name: living_room_temp
   '0x60a423fffef161c5':
     friendly_name: hallway_light
   '0x60a423fffeeeee48':
-    friendly_name: hallway_light_switch
+    friendly_name: hallway_lights_switch
   '0x04cf8cdf3c7d446b':
     friendly_name: aqara_light_switch
   '0x00158d000594f7dd':
     friendly_name: aqara_double_wall_switch
   '0x00158d000577da15':
-    friendly_name: aqara_vibrasion_sensor
+    friendly_name: aqara_vibration_sensor
   '0xbc33acfffebe553e':
     friendly_name: kitchen_light_switch
   '0x60a423fffeed49e1':
-    friendly_name: 'hallway_light_1'
+    friendly_name: hallway_light_1
   '0x60a423fffece9e4f':
-    friendly_name: 'hallway_light_3'
+    friendly_name: hallway_light_3
   '0xbc33acfffec2e438':
-    friendly_name: 'hallway_light_2'
+    friendly_name: hallway_light_2
 groups:
   '1':
     friendly_name: all_ikea_lights
