@@ -21,7 +21,7 @@ describe('OTA update', () => {
         settings._reRead();
         settings.set(['advanced', 'ikea_ota_use_test_url'], true);
         data.writeEmptyState();
-        controller = new Controller();
+        controller = new Controller(jest.fn(), jest.fn());
         await controller.start();
         await flushPromises();
         MQTT.publish.mockClear();
@@ -51,7 +51,7 @@ describe('OTA update', () => {
         expect(mapped.ota.updateToLatest).toHaveBeenCalledTimes(1);
         expect(mapped.ota.updateToLatest).toHaveBeenCalledWith(device, logger, expect.any(Function));
         expect(logger.info).toHaveBeenCalledWith(`Update of 'bulb' at 0.00%`);
-        expect(logger.info).toHaveBeenCalledWith(`Update of 'bulb' at 10.00%, +- 60 minutes remaining`);
+        expect(logger.info).toHaveBeenCalledWith(`Update of 'bulb' at 10.00%, ≈ 60 minutes remaining`);
         expect(logger.info).toHaveBeenCalledWith(`Finished update of 'bulb', from '{"dateCode":"20190101","softwareBuildID":1}' to '{"dateCode":"20190102","softwareBuildID":2}'`);
         expect(device.save).toHaveBeenCalledTimes(1);
         expect(device.dateCode).toBe('20190102');
@@ -250,6 +250,20 @@ describe('OTA update', () => {
         );
     });
 
+    it('Should not check for update when device requests it and disable_automatic_update_check is set to true', async () => {
+        settings.set(['ota', 'disable_automatic_update_check'], true);
+        const device = zigbeeHerdsman.devices.bulb;
+        const data = {imageType: 12382};
+        const mapped = zigbeeHerdsmanConverters.findByDevice(device)
+        mockClear(mapped);
+        mapped.ota.isUpdateAvailable.mockReturnValueOnce(true);
+        const payload = {data, cluster: 'genOta', device, endpoint: device.getEndpoint(1), type: 'commandQueryNextImageRequest', linkquality: 10};
+        logger.info.mockClear();
+        await zigbeeHerdsman.events.message(payload);
+        await flushPromises();
+        expect(mapped.ota.isUpdateAvailable).toHaveBeenCalledTimes(0);
+    });
+
     it('Should respond with NO_IMAGE_AVAILABLE when not supporting OTA', async () => {
         const device = zigbeeHerdsman.devices.QBKG04LM;
         const data = {imageType: 12382};
@@ -296,7 +310,7 @@ describe('OTA update', () => {
         expect(mapped.ota.updateToLatest).toHaveBeenCalledTimes(1);
         expect(mapped.ota.updateToLatest).toHaveBeenCalledWith(device, logger, expect.any(Function));
         expect(logger.info).toHaveBeenCalledWith(`Update of 'bulb' at 0.00%`);
-        expect(logger.info).toHaveBeenCalledWith(`Update of 'bulb' at 10.00%, +- 60 minutes remaining`);
+        expect(logger.info).toHaveBeenCalledWith(`Update of 'bulb' at 10.00%, ≈ 60 minutes remaining`);
         expect(logger.info).toHaveBeenCalledWith(`Finished update of 'bulb', from '{"dateCode":"20190101","softwareBuildID":1}' to '{"dateCode":"20190102","softwareBuildID":2}'`);
         expect(logger.error).toHaveBeenCalledTimes(0);
         expect(device.save).toHaveBeenCalledTimes(1);
