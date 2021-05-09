@@ -144,7 +144,7 @@
         },
         "adapter": {
           "type": ["string", "null"],
-          "enum": ["deconz", "zstack", "zigate"],
+          "enum": ["deconz", "zstack", "zigate", "ezsp"],
           "title": "Adapter",
           "requiresRestart": true,
           "description": "Adapter type, not needed unless you are experiencing problems"
@@ -274,6 +274,13 @@
           "description": "Log rotation",
           "default": true
         },
+        "log_symlink_current": {
+          "type": "boolean",
+          "title": "Log symlink current",
+          "requiresRestart": true,
+          "description": "Create symlink to current logs in the log directory",
+          "default": false
+        },
         "log_level": {
           "type": "string",
           "enum": ["info", "warn", "error", "debug"],
@@ -310,8 +317,8 @@
           "type": "number",
           "title": "Baudrate",
           "requiresRestart": true,
-          "description": "Baudrate for serial port, default: 115200 for Z-Stack, 38400 for Deconz",
-          "examples": [38400, 115200]
+          "description": "Baud rate speed for serial port, this can be anything firmware support but default is 115200 for Z-Stack and EZSP, 38400 for Deconz, however note that some EZSP firmware need 57600",
+          "examples": [38400, 57600, 115200]
         },
         "rtscts": {
           "type": "boolean",
@@ -589,8 +596,8 @@
         "update_check_interval": {
           "type": "number",
           "title": "Update check interval",
-          "description": "Your device may request a check for a new firmware update. This value determines how frequently third party servers may actually be contacted to look for firmware updates. The value is set in minutes, and the default is 10.",
-          "default": 10
+          "description": "Your device may request a check for a new firmware update. This value determines how frequently third party servers may actually be contacted to look for firmware updates. The value is set in minutes, and the default is 1 day.",
+          "default": 1440
         },
         "disable_automatic_update_check": {
           "type": "boolean",
@@ -702,6 +709,11 @@
           "examples": ["temperature", "battery", "action"],
           "title": "Filtered attributes",
           "description": "Allows to prevent certain attributes from being published"
+        },
+        "icon": {
+          "type": "string",
+          "title": "Icon",
+          "description": "The user-defined device icon for the frontend. It can be a link to an image (not a path to a file) or base64 encoded data URL like: image/svg+xml;base64,PHN2ZyB3aW....R0aD"
         }
       },
       "required": ["friendly_name"]

@@ -74,7 +74,7 @@ describe('Frontend', () => {
         mockWS.implementation.clients = [];
         data.writeDefaultConfiguration();
         data.writeDefaultState();
-        settings._reRead();
+        settings.reRead();
         settings.set(['frontend'], {port: 8081, host: "127.0.0.1"});
         settings.set(['homeassistant'], true);
         zigbeeHerdsman.devices.bulb.linkquality = 10;
@@ -130,7 +130,7 @@ describe('Frontend', () => {
         expect(MQTT.publish).toHaveBeenCalledTimes(4);
         expect(MQTT.publish).toHaveBeenCalledWith(
             'zigbee2mqtt/bulb_color',
-            stringify({state: 'ON'}),
+            stringify({state: 'ON', linkquality: null}),
             { retain: false, qos: 0 },
             expect.any(Function)
         );
@@ -141,7 +141,7 @@ describe('Frontend', () => {
 
         // Received message on socket
         expect(mockWSClient.implementation.send).toHaveBeenCalledTimes(4);
-        expect(mockWSClient.implementation.send).toHaveBeenCalledWith(stringify({topic: 'bulb_color', payload: {state: 'ON'}}));
+        expect(mockWSClient.implementation.send).toHaveBeenCalledWith(stringify({topic: 'bulb_color', payload: {state: 'ON', linkquality: null}}));
 
         // Shouldnt set when not ready
         mockWSClient.implementation.send.mockClear();
