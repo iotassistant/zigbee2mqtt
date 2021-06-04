@@ -15,13 +15,13 @@ describe('Bridge legacy', () => {
 
     beforeAll(async () => {
         this.version = await require('../../lib/util/utils').getZigbee2mqttVersion();
-        controller = new Controller();
+        controller = new Controller(jest.fn(), jest.fn());
         await controller.start();
     })
 
     beforeEach(() => {
         data.writeDefaultConfiguration();
-        settings._reRead();
+        settings.reRead();
         data.writeDefaultState();
         logger.info.mockClear();
         logger.warn.mockClear();
@@ -123,12 +123,12 @@ describe('Bridge legacy', () => {
         MQTT.events.message('zigbee2mqtt/bridge/config/permit_join', 'true');
         await flushPromises();
         expect(zigbeeHerdsman.permitJoin).toHaveBeenCalledTimes(1);
-        expect(zigbeeHerdsman.permitJoin).toHaveBeenCalledWith(true);
+        expect(zigbeeHerdsman.permitJoin).toHaveBeenCalledWith(true, undefined, undefined);
         zigbeeHerdsman.permitJoin.mockClear();
         MQTT.events.message('zigbee2mqtt/bridge/config/permit_join', 'false');
         await flushPromises();
         expect(zigbeeHerdsman.permitJoin).toHaveBeenCalledTimes(1);
-        expect(zigbeeHerdsman.permitJoin).toHaveBeenCalledWith(false);
+        expect(zigbeeHerdsman.permitJoin).toHaveBeenCalledWith(false, undefined, undefined);
     });
 
     it('Should allow to reset', async () => {
@@ -188,7 +188,7 @@ describe('Bridge legacy', () => {
         await flushPromises();
         expect(MQTT.publish.mock.calls[0][0]).toStrictEqual('zigbee2mqtt/bridge/log');
         const payload = JSON.parse(MQTT.publish.mock.calls[0][1]);
-        expect(payload).toStrictEqual({"message": [{"ID": 1, "friendly_name": "group_1", "retain": false, 'devices': [], optimistic: true}, {"ID": 2, "friendly_name": "group_2", "retain": false, "devices": [], optimistic: true}, {"ID": 11, "friendly_name": "group_with_tradfri", "retain": false, "devices": ['bulb_2'], optimistic: true}, {"ID": 12, "friendly_name": "thermostat_group", "retain": false, "devices": ['TS0601_thermostat'], optimistic: true}, {"ID": 15071, "friendly_name": "group_tradfri_remote", "retain": false, "devices": ['bulb_color_2', 'bulb_2'], optimistic: true}], "type": "groups"});
+        expect(payload).toStrictEqual({"message":[{"ID":1,"devices":[],"friendly_name":"group_1","retain":false},{"ID":2,"devices":[],"friendly_name":"group_2","retain":false},{"ID":11,"devices":["bulb_2"],"friendly_name":"group_with_tradfri","retain":false},{"ID":12,"devices":["TS0601_thermostat"],"friendly_name":"thermostat_group","retain":false},{"ID":14,"devices":["power_plug"],"friendly_name":"switch_group","retain":false},{"ID":21,"devices":["GLEDOPTO_2ID/cct"],"friendly_name":"gledopto_group"},{"ID":15071,"devices":["bulb_color_2","bulb_2"],"friendly_name":"group_tradfri_remote","retain":false}],"type":"groups"});
     });
 
     it('Should allow rename devices', async () => {
@@ -221,10 +221,10 @@ describe('Bridge legacy', () => {
 
     it('Should allow rename groups', async () => {
         MQTT.publish.mockClear();
-        expect(settings.getGroup(1)).toStrictEqual({"ID": 1, devices: [], friendlyName: "group_1", "friendly_name": "group_1", optimistic: true, retain: false});
+        expect(settings.getGroup(1)).toStrictEqual({"ID": 1, devices: [], friendlyName: "group_1", "friendly_name": "group_1", retain: false});
         MQTT.events.message('zigbee2mqtt/bridge/config/rename', stringify({old: 'group_1', new: 'group_1_renamed'}));
         await flushPromises();
-        expect(settings.getGroup(1)).toStrictEqual({"ID": 1, devices: [], friendlyName: "group_1_renamed", "friendly_name": "group_1_renamed", optimistic: true, retain: false});
+        expect(settings.getGroup(1)).toStrictEqual({"ID": 1, devices: [], friendlyName: "group_1_renamed", "friendly_name": "group_1_renamed", retain: false});
         expect(MQTT.publish).toHaveBeenCalledWith(
             'zigbee2mqtt/bridge/log',
             stringify({type: 'group_renamed', message: {from: 'group_1', to: 'group_1_renamed'}}),
@@ -251,7 +251,7 @@ describe('Bridge legacy', () => {
     });
 
     it('Shouldnt rename when no device has been joined', async () => {
-        controller = new Controller();
+        controller = new Controller(jest.fn(), jest.fn());
         await controller.start();
         await flushPromises();
         expect(settings.getDevice('0x000b57fffec6a5b2').friendlyName).toStrictEqual('bulb');
@@ -270,7 +270,7 @@ describe('Bridge legacy', () => {
             {qos: 0, retain: false},
             expect.any(Function)
         );
-        expect(settings.getGroup('new_group')).toStrictEqual({"ID": 3, "friendlyName": "new_group", "friendly_name": "new_group", devices: [], optimistic: true});
+        expect(settings.getGroup('new_group')).toStrictEqual({"ID": 3, "friendlyName": "new_group", "friendly_name": "new_group", devices: []});
         expect(zigbeeHerdsman.createGroup).toHaveBeenCalledTimes(1);
         expect(zigbeeHerdsman.createGroup).toHaveBeenCalledWith(3);
     });
@@ -279,7 +279,7 @@ describe('Bridge legacy', () => {
         zigbeeHerdsman.createGroup.mockClear();
         MQTT.events.message('zigbee2mqtt/bridge/config/add_group', '{"friendly_name": "new_group"}');
         await flushPromises();
-        expect(settings.getGroup('new_group')).toStrictEqual({"ID": 3, "friendlyName": "new_group", "friendly_name": "new_group", devices: [], optimistic: true});
+        expect(settings.getGroup('new_group')).toStrictEqual({"ID": 3, "friendlyName": "new_group", "friendly_name": "new_group", devices: []});
         expect(zigbeeHerdsman.createGroup).toHaveBeenCalledTimes(1);
         expect(zigbeeHerdsman.createGroup).toHaveBeenCalledWith(3);
         expect(MQTT.publish).toHaveBeenCalledWith(
@@ -294,7 +294,7 @@ describe('Bridge legacy', () => {
         zigbeeHerdsman.createGroup.mockClear();
         MQTT.events.message('zigbee2mqtt/bridge/config/add_group', '{"friendly_name": "new_group", "id": 42}');
         await flushPromises();
-        expect(settings.getGroup('new_group')).toStrictEqual({"ID": 42, "friendlyName": "new_group", "friendly_name": "new_group", devices: [], optimistic: true});
+        expect(settings.getGroup('new_group')).toStrictEqual({"ID": 42, "friendlyName": "new_group", "friendly_name": "new_group", devices: []});
         expect(zigbeeHerdsman.createGroup).toHaveBeenCalledTimes(1);
         expect(zigbeeHerdsman.createGroup).toHaveBeenCalledWith(42);
         expect(MQTT.publish).toHaveBeenCalledWith(
@@ -309,7 +309,7 @@ describe('Bridge legacy', () => {
         zigbeeHerdsman.createGroup.mockClear();
         MQTT.events.message('zigbee2mqtt/bridge/config/add_group', '{"id": 42}');
         await flushPromises();
-        expect(settings.getGroup('group_42')).toStrictEqual({"ID": 42, "friendlyName": "group_42", "friendly_name": "group_42", devices: [], optimistic: true});
+        expect(settings.getGroup('group_42')).toStrictEqual({"ID": 42, "friendlyName": "group_42", "friendly_name": "group_42", devices: []});
         expect(zigbeeHerdsman.createGroup).toHaveBeenCalledTimes(1);
         expect(zigbeeHerdsman.createGroup).toHaveBeenCalledWith(42)
     });
@@ -457,22 +457,22 @@ describe('Bridge legacy', () => {
     });
 
     it('Should allow to touchlink factory reset (OK)', async () => {
-        zigbeeHerdsman.touchlinkFactoryReset.mockClear();
+        zigbeeHerdsman.touchlinkFactoryResetFirst.mockClear();
 
-        zigbeeHerdsman.touchlinkFactoryReset.mockReturnValueOnce(true);
+        zigbeeHerdsman.touchlinkFactoryResetFirst.mockReturnValueOnce(true);
         MQTT.events.message('zigbee2mqtt/bridge/config/touchlink/factory_reset', '');
         await flushPromises();
-        expect(zigbeeHerdsman.touchlinkFactoryReset).toHaveBeenCalledTimes(1);
+        expect(zigbeeHerdsman.touchlinkFactoryResetFirst).toHaveBeenCalledTimes(1);
         expect(logger.info).toHaveBeenCalledWith('Successfully factory reset device through Touchlink');
     });
 
     it('Should allow to touchlink factory reset (FAILS)', async () => {
-        zigbeeHerdsman.touchlinkFactoryReset.mockClear();
+        zigbeeHerdsman.touchlinkFactoryResetFirst.mockClear();
 
-        zigbeeHerdsman.touchlinkFactoryReset.mockReturnValueOnce(false);
+        zigbeeHerdsman.touchlinkFactoryResetFirst.mockReturnValueOnce(false);
         MQTT.events.message('zigbee2mqtt/bridge/config/touchlink/factory_reset', '');
         await flushPromises();
-        expect(zigbeeHerdsman.touchlinkFactoryReset).toHaveBeenCalledTimes(1);
+        expect(zigbeeHerdsman.touchlinkFactoryResetFirst).toHaveBeenCalledTimes(1);
         expect(logger.warn).toHaveBeenCalledWith('Failed to factory reset device through Touchlink');
     });
 });

@@ -1,5 +1,6 @@
 const data = require('./stub/data');
 const logger = require('./stub/logger');
+const stringify = require('json-stable-stringify-without-jsonify');
 const zigbeeHerdsman = require('./stub/zigbeeHerdsman');
 zigbeeHerdsman.returnDevices.push('0x000b57fffec6a5b3');
 zigbeeHerdsman.returnDevices.push('0x00124b00120144ae');
@@ -24,12 +25,11 @@ describe('Availability', () => {
 
     beforeEach(async () => {
         data.writeDefaultConfiguration();
-        settings._reRead();
+        settings.reRead();
         data.writeEmptyState();
         jest.useFakeTimers();
         settings.set(['advanced', 'availability_timeout'], 10);
-        settings.set(['experimental', 'new_api'], true);
-        controller = new Controller();
+        controller = new Controller(jest.fn(), jest.fn());
         mocksClear.forEach((m) => m.mockClear());
         await controller.start();
         await flushPromises();
@@ -81,7 +81,7 @@ describe('Availability', () => {
     });
 
     it('Should publish availabilty online and query state on reconnect', async () => {
-        const device = zigbeeHerdsman.devices.bulb_color;
+        const device = zigbeeHerdsman.devices.E11_G13;
         const endpoint = device.getEndpoint(1);
         device.ping.mockImplementationOnce(() => {throw new Error('failed')});
         jest.advanceTimersByTime(11 * 1000);
@@ -90,16 +90,15 @@ describe('Availability', () => {
         jest.advanceTimersByTime(11 * 1000);
         await flushPromises();
         expect(MQTT.publish).toHaveBeenCalledWith(
-            'zigbee2mqtt/bulb_color/availability',
+            'zigbee2mqtt/bulb_enddevice/availability',
           'online',
           { retain: true, qos: 0 },
           expect.any(Function)
         );
 
-        expect(endpoint.read).toHaveBeenCalledTimes(3);
+        expect(endpoint.read).toHaveBeenCalledTimes(2);
         expect(endpoint.read).toHaveBeenCalledWith('genLevelCtrl', ['currentLevel']);
         expect(endpoint.read).toHaveBeenCalledWith('genOnOff', ['onOff']);
-        expect(endpoint.read).toHaveBeenCalledWith('lightingColorCtrl', ['currentX', 'currentY', 'colorTemperature']);
     });
 
     it('Should fail gracefully when quering state after reconnect fails', async () => {
@@ -173,15 +172,14 @@ describe('Availability', () => {
         endpoint.read.mockClear();
         await zigbeeHerdsman.events.deviceAnnounce({device});
         await flushPromises();
-        expect(endpoint.read).toHaveBeenCalledTimes(3);
+        expect(endpoint.read).toHaveBeenCalledTimes(2);
         expect(endpoint.read).toHaveBeenCalledWith('genLevelCtrl', ['currentLevel']);
         expect(endpoint.read).toHaveBeenCalledWith('genOnOff', ['onOff']);
-        expect(endpoint.read).toHaveBeenCalledWith('lightingColorCtrl', ['currentX', 'currentY', 'colorTemperature']);
     });
 
     it('Should not retrieve the state when device is turned on/off within availability timeout on deviceJoined', async () => {
         MQTT.publish.mockClear();
-        const device = zigbeeHerdsman.devices.bulb_color;
+        const device = zigbeeHerdsman.devices.E11_G13;
         const endpoint = device.getEndpoint(1);
         endpoint.read.mockClear();
         await zigbeeHerdsman.events.deviceJoined({device});
@@ -203,7 +201,7 @@ describe('Availability', () => {
         settings.set(['advanced', 'availability_blocklist'], ['bulb_color'])
         await controller.stop();
         await flushPromises();
-        controller = new Controller();
+        controller = new Controller(jest.fn(), jest.fn());
         await controller.start();
         await flushPromises();
         device.ping.mockClear();
@@ -217,7 +215,7 @@ describe('Availability', () => {
         settings.set(['advanced', 'availability_blacklist'], ['bulb_color'])
         await controller.stop();
         await flushPromises();
-        controller = new Controller();
+        controller = new Controller(jest.fn(), jest.fn());
         await controller.start();
         await flushPromises();
         device.ping.mockClear();
@@ -231,7 +229,7 @@ describe('Availability', () => {
         settings.set(['advanced', 'availability_blocklist'], [device.ieeeAddr]);
         await controller.stop();
         await flushPromises();
-        controller = new Controller();
+        controller = new Controller(jest.fn(), jest.fn());
         await controller.start();
         await flushPromises();
         device.ping.mockClear();
@@ -258,7 +256,7 @@ describe('Availability', () => {
         settings.set(['advanced', 'availability_passlist'], ['bulb_color']);
         await controller.stop();
         await flushPromises();
-        controller = new Controller();
+        controller = new Controller(jest.fn(), jest.fn());
         await controller.start();
         await flushPromises();
         device.ping.mockClear();
@@ -272,7 +270,7 @@ describe('Availability', () => {
         settings.set(['advanced', 'availability_whitelist'], ['bulb_color']);
         await controller.stop();
         await flushPromises();
-        controller = new Controller();
+        controller = new Controller(jest.fn(), jest.fn());
         await controller.start();
         await flushPromises();
         device.ping.mockClear();
@@ -286,7 +284,7 @@ describe('Availability', () => {
         settings.set(['advanced', 'availability_passlist'], [device.ieeeAddr]);
         await controller.stop();
         await flushPromises();
-        controller = new Controller();
+        controller = new Controller(jest.fn(), jest.fn());
         await controller.start();
         await flushPromises();
         device.ping.mockClear();
@@ -301,7 +299,7 @@ describe('Availability', () => {
         settings.set(['advanced', 'availability_passlist'], ['0x000b57fffec6a5b3'])
         await controller.stop();
         await flushPromises();
-        controller = new Controller();
+        controller = new Controller(jest.fn(), jest.fn());
         await controller.start();
         await flushPromises();
         jest.advanceTimersByTime(11 * 1000);
@@ -343,7 +341,7 @@ describe('Availability', () => {
     });
 
     it('Should publish availability when end device joins', async () => {
-        const device = zigbeeHerdsman.devices.WXKG02LM;
+        const device = zigbeeHerdsman.devices.WXKG02LM_rev1;
         const payload = {device};
         MQTT.publish.mockClear();
         await zigbeeHerdsman.events.deviceJoined(payload);
@@ -387,7 +385,7 @@ describe('Availability', () => {
         await controller.stop();
         await flushPromises();
         MQTT.publish.mockClear();
-        controller = new Controller();
+        controller = new Controller(jest.fn(), jest.fn());
         getExtension().state[device.ieeeAddr] = false;
         await controller.start();
         await flushPromises();
@@ -408,5 +406,35 @@ describe('Availability', () => {
             null,
             {retain: true, qos: 0}, expect.any(Function)
         );
+    });
+
+    it('Should clear retained availability topic when device is renamed', async () => {
+        MQTT.publish.mockClear();
+        MQTT.events.message('zigbee2mqtt/bridge/request/device/rename', stringify({"from": "bulb_color", "to": "bulb_color_new_name"}));
+        await flushPromises();
+        expect(MQTT.publish).toHaveBeenCalledWith(
+            'zigbee2mqtt/bulb_color/availability',
+            null,
+            {retain: true, qos: 0}, expect.any(Function)
+        );
+    });
+
+    it('Should clear retained availability topic when device does not exist', async () => {
+        MQTT.publish.mockClear();
+        MQTT.events.message('zigbee2mqtt/not_existing_hahaha/availability', 'offline');
+        await flushPromises();
+        expect(MQTT.publish).toHaveBeenCalledTimes(1);
+        expect(MQTT.publish).toHaveBeenCalledWith('zigbee2mqtt/not_existing_hahaha/availability', null, {retain: true, qos: 0}, expect.any(Function));
+
+        MQTT.publish.mockClear();
+        MQTT.events.message('zigbee2mqtt/0x000b57fffec6a5b3/availability', 'offline');
+        await flushPromises();
+        expect(MQTT.publish).toHaveBeenCalledTimes(1);
+        expect(MQTT.publish).toHaveBeenCalledWith('zigbee2mqtt/0x000b57fffec6a5b3/availability', null, {retain: true, qos: 0}, expect.any(Function));
+
+        MQTT.publish.mockClear();
+        MQTT.events.message('zigbee2mqtt/bulb_color/availability', 'offline');
+        await flushPromises();
+        expect(MQTT.publish).toHaveBeenCalledTimes(0);
     });
 });

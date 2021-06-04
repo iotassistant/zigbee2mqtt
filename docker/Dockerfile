@@ -1,7 +1,7 @@
-FROM node:12-alpine as base
+FROM node:14-alpine3.12 as base
 
 WORKDIR /app
-RUN apk add --no-cache tzdata eudev
+RUN apk add --no-cache tzdata eudev tini
 
 COPY package.json ./
 
@@ -10,7 +10,7 @@ FROM base as dependencies
 
 COPY npm-shrinkwrap.json ./
 
-RUN apk add --no-cache --virtual .buildtools make gcc g++ python linux-headers git && \
+RUN apk add --no-cache --virtual .buildtools make gcc g++ python3 linux-headers git && \
     npm ci --production && \
     apk del .buildtools
 
@@ -19,7 +19,7 @@ FROM base as release
 
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY lib ./lib
-COPY index.js data/configuration.yaml ./
+COPY LICENSE index.js data/configuration.yaml ./
 
 COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
@@ -30,4 +30,4 @@ ARG COMMIT
 RUN echo "{\"hash\": \"$COMMIT\"}" > .hash.json
 
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["npm", "start"]
+CMD [ "/sbin/tini", "--", "node", "index.js"]

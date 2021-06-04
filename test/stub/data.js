@@ -162,6 +162,18 @@ function writeDefaultConfiguration() {
             '0x0017882104a44559': {
                 friendly_name: 'TS0601_thermostat',
             },
+            '0x0017882194e45543': {
+                friendly_name: 'QS-Zigbee-D02-TRIAC-2C-LN',
+            },
+            '0x0017880104e45724': {
+                friendly_name: 'GLEDOPTO_2ID',
+            },
+            '0x0017880104e45561': {
+                friendly_name: 'temperature_sensor',
+            },
+            '0x0017880104e45562': {
+                friendly_name: 'heating_actuator',
+            }
         },
         groups: {
             '1': {
@@ -186,6 +198,15 @@ function writeDefaultConfiguration() {
                 friendly_name: 'thermostat_group',
                 retain: false,
                 devices: ['TS0601_thermostat'],
+            },
+            '14': {
+                friendly_name: 'switch_group',
+                retain: false,
+                devices: ['power_plug'],
+            },
+            '21': {
+                friendly_name: 'gledopto_group',
+                devices: ['GLEDOPTO_2ID/cct'],
             }
         },
         external_converters: [],

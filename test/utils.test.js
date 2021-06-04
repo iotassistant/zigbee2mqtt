@@ -1,5 +1,6 @@
 const utils = require('../lib/util/utils.js');
 const version = require('../package.json').version;
+const versionHerdsman = require('../node_modules/zigbee-herdsman/package.json').version;
 
 describe('Utils', () => {
     describe('Is xiaomi device', () => {
@@ -41,6 +42,11 @@ describe('Utils', () => {
         expect(await utils.getZigbee2mqttVersion()).toStrictEqual({"commitHash": "unknown", "version": version});
     })
 
+    it('Check dependency version', async () => {
+        var dependency = 'zigbee-herdsman';
+        expect(await utils.getDependencyVersion(dependency)).toStrictEqual({"version": versionHerdsman});
+    })
+
     it('To local iso string', async () => {
         var date = new Date('August 19, 1975 23:15:30 UTC+00:00');
         var getTimezoneOffset = Date.prototype.getTimezoneOffset;
@@ -54,5 +60,11 @@ describe('Utils', () => {
     it('Throw exception when formating with invalid date', async () => {
         var date = new Date('August 19, 1975 23:15:30 UTC+00:00');
         expect(() => utils.formatDate(date, 'invalid', 1)).toThrowError("Unsupported type 'invalid'")
+    })
+
+    it('Get key', async () => {
+        expect(utils.getKey({'1': '1'}, '1', 2, null)).toBe('1');
+        expect(utils.getKey({'1': '1'}, '2', 2, null)).toBe(2);
+        expect(utils.getKey({'1': '1'}, '1', null, () => '3')).toBe('3');
     })
 });

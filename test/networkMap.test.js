@@ -2,33 +2,36 @@ const data = require('./stub/data');
 const logger = require('./stub/logger');
 const zigbeeHerdsman = require('./stub/zigbeeHerdsman');
 const stringify = require('json-stable-stringify-without-jsonify');
-
-const {coordinator, bulb, bulb_color, WXKG02LM, CC2530_ROUTER, unsupported_router} = zigbeeHerdsman.devices;
+const fs = require('fs');
+const path = require('path');
+const {coordinator, bulb, bulb_color, WXKG02LM_rev1, CC2530_ROUTER, unsupported_router, external_converter_device} = zigbeeHerdsman.devices;
 
 zigbeeHerdsman.returnDevices.push(coordinator.ieeeAddr);
 zigbeeHerdsman.returnDevices.push(bulb.ieeeAddr);
 zigbeeHerdsman.returnDevices.push(bulb_color.ieeeAddr);
-zigbeeHerdsman.returnDevices.push(WXKG02LM.ieeeAddr);
+zigbeeHerdsman.returnDevices.push(WXKG02LM_rev1.ieeeAddr);
 zigbeeHerdsman.returnDevices.push(CC2530_ROUTER.ieeeAddr);
 zigbeeHerdsman.returnDevices.push(unsupported_router.ieeeAddr);
+zigbeeHerdsman.returnDevices.push(external_converter_device.ieeeAddr)
 const MQTT = require('./stub/mqtt');
 const settings = require('../lib/util/settings');
 const Controller = require('../lib/controller');
 const flushPromises = () => new Promise(setImmediate);
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 Date.now = jest.fn()
 Date.now.mockReturnValue(10000);
 const mocksClear = [MQTT.publish, logger.warn, logger.debug];
+const setTimeoutNative = setTimeout;
 
 describe('Networkmap', () => {
     let controller;
 
     beforeAll(async () => {
         data.writeDefaultConfiguration();
-        settings._reRead();
+        settings.reRead();
         data.writeEmptyState();
-        settings.set(['experimental', 'new_api'], true);
-        controller = new Controller();
+        fs.copyFileSync(path.join(__dirname, 'assets', 'mock-external-converter.js'), path.join(data.mockDir, 'mock-external-converter.js'));
+        settings.set(['external_converters'], ['mock-external-converter.js']);
+        controller = new Controller(jest.fn(), jest.fn());
         await controller.start();
         mocksClear.forEach((m) => m.mockClear());
         await flushPromises();
@@ -39,22 +42,29 @@ describe('Networkmap', () => {
         await flushPromises();
         const device = zigbeeHerdsman.devices.bulb_color;
         device.lastSeen = 1000;
+        external_converter_device.lastSeen = 1000;
+        global.setTimeout = (r) => r();
+    });
+
+    afterEach(async () => {
+        global.setTimeout = setTimeoutNative;
     });
 
     function mock() {
         /**
          * Topology
-         *
+         *             | -> external_device
          *             | -> bulb_color -> unsupported_router (offline)
          * coordinator |      ^     ^
          *             |      |     | (not valid)
          *             | -> bulb    |
-         *                    |  -> CC2530_ROUTER -> WXKG02LM
+         *                    |  -> CC2530_ROUTER -> WXKG02LM_rev1
          *
          */
         coordinator.lqi = () => {return {neighbors: [
             {ieeeAddr: bulb_color.ieeeAddr, networkAddress: bulb_color.networkAddress, relationship: 2, depth: 1, linkquality: 120},
-            {ieeeAddr: bulb.ieeeAddr, networkAddress: bulb.networkAddress, relationship: 2, depth: 1, linkquality: 92}
+            {ieeeAddr: bulb.ieeeAddr, networkAddress: bulb.networkAddress, relationship: 2, depth: 1, linkquality: 92},
+            {ieeeAddr: external_converter_device.ieeeAddr, networkAddress: external_converter_device.networkAddress, relationship: 2, depth: 1, linkquality: 92}
         ]}};
         coordinator.routingTable = () => {return {table: [
             {destinationAddress: CC2530_ROUTER.networkAddress, status: 'ACTIVE', nextHop: bulb.networkAddress},
@@ -70,7 +80,7 @@ describe('Networkmap', () => {
         bulb_color.routingTable = () => {return {table: []}};
 
         CC2530_ROUTER.lqi = () => {return {neighbors: [
-            {ieeeAddr: WXKG02LM.ieeeAddr, networkAddress: WXKG02LM.networkAddress, relationship: 1, depth: 2, linkquality: 130},
+            {ieeeAddr: '0x0000000000000000', networkAddress: WXKG02LM_rev1.networkAddress, relationship: 1, depth: 2, linkquality: 130},
             {ieeeAddr: bulb_color.ieeeAddr, networkAddress: bulb_color.networkAddress, relationship: 4, depth: 2, linkquality: 130},
         ]}};
         CC2530_ROUTER.routingTable = () => {return {table: []}};
@@ -87,26 +97,7 @@ describe('Networkmap', () => {
         let call = MQTT.publish.mock.calls[0];
         expect(call[0]).toStrictEqual('zigbee2mqtt/bridge/networkmap/raw');
 
-        const conv = (device) => {return {ieeeAddr: device.ieeeAddr, networkAddress: device.networkAddress}};
-
-        const expected = {
-            "nodes":[
-                {"definition":null,"lastSeen": 1000,"ieeeAddr":coordinator.ieeeAddr,"friendlyName":"Coordinator","type":"Coordinator","networkAddress":0,"modelID":null,"failed":[]},
-                {"definition":{"description": "TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white","model": "LED1545G12","supports": "on/off, brightness, color temperature","vendor": "IKEA"},"lastSeen": 1000,"ieeeAddr":bulb.ieeeAddr,"friendlyName":"bulb","type":"Router","networkAddress":40369,"modelID":"TRADFRI bulb E27 WS opal 980lm","failed":[]},
-                {"definition":{"description": "Hue Go","model": "7146060PH","supports": "on/off, brightness, color temperature, color xy, power-on behavior","vendor": "Philips"},"lastSeen": 1000,"ieeeAddr":bulb_color.ieeeAddr,"friendlyName":"bulb_color","type":"Router","networkAddress":40399,"modelID":"LLC020","failed":[]},
-                {"definition":{"description": "Aqara double key wireless wall switch","model": "WXKG02LM","supports": "left, right, both click (and double, long click for left, right and both depending on model)","vendor": "Xiaomi"},"lastSeen": 1000,"ieeeAddr":WXKG02LM.ieeeAddr,"friendlyName":"button_double_key","type":"EndDevice","networkAddress":6538,"modelID":"lumi.sensor_86sw2.es1"},
-                {"definition":null,"lastSeen": 1000,"ieeeAddr":unsupported_router.ieeeAddr,"friendlyName":"0x0017880104e45525","type":"Router","networkAddress":6536,"modelID":"notSupportedModelID","manufacturerName": "Boef","failed":['lqi', 'routingTable']},
-                {"definition":{"description": "[CC2530 router](http://ptvo.info/cc2530-based-zigbee-coordinator-and-router-112/)","model": "CC2530.ROUTER","supports": "state, description, type, rssi","vendor": "Custom devices (DiY)"},"lastSeen": 1000,"ieeeAddr":CC2530_ROUTER.ieeeAddr,"friendlyName":"cc2530_router","type":"Router","networkAddress":6540,"modelID":"lumi.router","failed":[]},
-            ],
-            "links":[
-                {depth: 1, linkquality: 120, routes: [], source: conv(bulb_color), target: conv(coordinator), sourceIeeeAddr: bulb_color.ieeeAddr, sourceNwkAddr: bulb_color.networkAddress, targetIeeeAddr: coordinator.ieeeAddr, lqi: 120, relationship: 2},
-                {depth: 1, linkquality: 92, routes: [{destinationAddress: CC2530_ROUTER.networkAddress, status: 'ACTIVE', nextHop: bulb.networkAddress}], source: conv(bulb), target: conv(coordinator), sourceIeeeAddr: bulb.ieeeAddr, sourceNwkAddr: bulb.networkAddress, targetIeeeAddr: coordinator.ieeeAddr, lqi: 92, relationship: 2},
-                {depth: 2, linkquality: 110, routes: [], source: conv(bulb_color), target: conv(bulb), sourceIeeeAddr: bulb_color.ieeeAddr, sourceNwkAddr: bulb_color.networkAddress, targetIeeeAddr: bulb.ieeeAddr, lqi: 110, relationship: 1},
-                {depth: 2, linkquality: 100, routes: [], source: conv(CC2530_ROUTER), target: conv(bulb), sourceIeeeAddr: CC2530_ROUTER.ieeeAddr, sourceNwkAddr: CC2530_ROUTER.networkAddress, targetIeeeAddr: bulb.ieeeAddr, lqi: 100, relationship: 1},
-                {depth: 2, linkquality: 130, routes: [], source: conv(WXKG02LM), target: conv(CC2530_ROUTER), sourceIeeeAddr: WXKG02LM.ieeeAddr, sourceNwkAddr: WXKG02LM.networkAddress, targetIeeeAddr: CC2530_ROUTER.ieeeAddr, lqi: 130, relationship: 1}
-            ]
-        };
-
+        const expected =  {"links":[{"depth":1,"linkquality":120,"lqi":120,"relationship":2,"routes":[],"source":{"ieeeAddr":"0x000b57fffec6a5b3","networkAddress":40399},"sourceIeeeAddr":"0x000b57fffec6a5b3","sourceNwkAddr":40399,"target":{"ieeeAddr":"0x00124b00120144ae","networkAddress":0},"targetIeeeAddr":"0x00124b00120144ae"},{"depth":1,"linkquality":92,"lqi":92,"relationship":2,"routes":[{"destinationAddress":6540,"nextHop":40369,"status":"ACTIVE"}],"source":{"ieeeAddr":"0x000b57fffec6a5b2","networkAddress":40369},"sourceIeeeAddr":"0x000b57fffec6a5b2","sourceNwkAddr":40369,"target":{"ieeeAddr":"0x00124b00120144ae","networkAddress":0},"targetIeeeAddr":"0x00124b00120144ae"},{"depth":1,"linkquality":92,"lqi":92,"relationship":2,"routes":[],"source":{"ieeeAddr":"0x0017880104e45511","networkAddress":1114},"sourceIeeeAddr":"0x0017880104e45511","sourceNwkAddr":1114,"target":{"ieeeAddr":"0x00124b00120144ae","networkAddress":0},"targetIeeeAddr":"0x00124b00120144ae"},{"depth":2,"linkquality":110,"lqi":110,"relationship":1,"routes":[],"source":{"ieeeAddr":"0x000b57fffec6a5b3","networkAddress":40399},"sourceIeeeAddr":"0x000b57fffec6a5b3","sourceNwkAddr":40399,"target":{"ieeeAddr":"0x000b57fffec6a5b2","networkAddress":40369},"targetIeeeAddr":"0x000b57fffec6a5b2"},{"depth":2,"linkquality":100,"lqi":100,"relationship":1,"routes":[],"source":{"ieeeAddr":"0x0017880104e45559","networkAddress":6540},"sourceIeeeAddr":"0x0017880104e45559","sourceNwkAddr":6540,"target":{"ieeeAddr":"0x000b57fffec6a5b2","networkAddress":40369},"targetIeeeAddr":"0x000b57fffec6a5b2"},{"depth":2,"linkquality":130,"lqi":130,"relationship":1,"routes":[],"source":{"ieeeAddr":"0x0017880104e45521","networkAddress":6538},"sourceIeeeAddr":"0x0017880104e45521","sourceNwkAddr":6538,"target":{"ieeeAddr":"0x0017880104e45559","networkAddress":6540},"targetIeeeAddr":"0x0017880104e45559"}],"nodes":[{"definition":null,"failed":[],"friendlyName":"Coordinator","ieeeAddr":"0x00124b00120144ae","lastSeen":1000,"modelID":null,"networkAddress":0,"type":"Coordinator"},{"definition":{"description":"TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white","model":"LED1545G12","supports":"light (state, brightness, color_temp, color_temp_startup), effect, power_on_behavior, linkquality","vendor":"IKEA"},"failed":[],"friendlyName":"bulb","ieeeAddr":"0x000b57fffec6a5b2","lastSeen":1000,"modelID":"TRADFRI bulb E27 WS opal 980lm","networkAddress":40369,"type":"Router"},{"definition":{"description":"Hue Go","model":"7146060PH","supports":"light (state, brightness, color_temp, color_temp_startup, color_xy, color_hs), effect, linkquality","vendor":"Philips"},"failed":[],"friendlyName":"bulb_color","ieeeAddr":"0x000b57fffec6a5b3","lastSeen":1000,"modelID":"LLC020","networkAddress":40399,"type":"Router"},{"definition":{"description":"Aqara double key wireless wall switch (2016 model)","model":"WXKG02LM_rev1","supports":"battery, action, voltage, linkquality","vendor":"Xiaomi"},"friendlyName":"button_double_key","ieeeAddr":"0x0017880104e45521","lastSeen":1000,"modelID":"lumi.sensor_86sw2.es1","networkAddress":6538,"type":"EndDevice"},{"definition":null,"failed":["lqi","routingTable"],"friendlyName":"0x0017880104e45525","ieeeAddr":"0x0017880104e45525","lastSeen":1000,"manufacturerName":"Boef","modelID":"notSupportedModelID","networkAddress":6536,"type":"Router"},{"definition":{"description":"[CC2530 router](http://ptvo.info/cc2530-based-zigbee-coordinator-and-router-112/)","model":"CC2530.ROUTER","supports":"led, linkquality","vendor":"Custom devices (DiY)"},"failed":[],"friendlyName":"cc2530_router","ieeeAddr":"0x0017880104e45559","lastSeen":1000,"modelID":"lumi.router","networkAddress":6540,"type":"Router"},{"definition":{"description": "external","model":"external_converter_device","supports":"linkquality","vendor":"external"},"friendlyName":"0x0017880104e45511","ieeeAddr":"0x0017880104e45511","lastSeen":1000,"modelID":"external_converter_device","networkAddress":1114,"type":"EndDevice"}]};
         expect(JSON.parse(call[1])).toStrictEqual(expected);
 
         /**
@@ -146,17 +137,19 @@ describe('Networkmap', () => {
 
         const expected = `digraph G {
             node[shape=record];
-              "0x00124b00120144ae" [style="bold, filled", fillcolor="#e04e5d", fontcolor="#ffffff", label="{Coordinator|0x00124b00120144ae (0)|0 seconds ago}"];
-              "0x000b57fffec6a5b2" [style="rounded, filled", fillcolor="#4ea3e0", fontcolor="#ffffff", label="{bulb|0x000b57fffec6a5b2 (40369)|IKEA TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white (LED1545G12)|9 seconds ago}"];
-              "0x000b57fffec6a5b2" -> "0x00124b00120144ae" [penwidth=2, weight=1, color="#009900", label="92 (routes: 6540)"]
-              "0x000b57fffec6a5b3" [style="rounded, filled", fillcolor="#4ea3e0", fontcolor="#ffffff", label="{bulb_color|0x000b57fffec6a5b3 (40399)|Philips Hue Go (7146060PH)|unknown}"];
+              "0x00124b00120144ae" [style="bold, filled", fillcolor="#e04e5d", fontcolor="#ffffff", label="{Coordinator|0x00124b00120144ae (0x0000)|0 seconds ago}"];
+              "0x000b57fffec6a5b2" [style="rounded, filled", fillcolor="#4ea3e0", fontcolor="#ffffff", label="{bulb|0x000b57fffec6a5b2 (0x9db1)|IKEA TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white (LED1545G12)|9 seconds ago}"];
+              "0x000b57fffec6a5b2" -> "0x00124b00120144ae" [penwidth=2, weight=1, color="#009900", label="92 (routes: 0x198c)"]
+              "0x000b57fffec6a5b3" [style="rounded, filled", fillcolor="#4ea3e0", fontcolor="#ffffff", label="{bulb_color|0x000b57fffec6a5b3 (0x9dcf)|Philips Hue Go (7146060PH)|unknown}"];
               "0x000b57fffec6a5b3" -> "0x00124b00120144ae" [penwidth=0.5, weight=0, color="#994444", label="120"]
               "0x000b57fffec6a5b3" -> "0x000b57fffec6a5b2" [penwidth=0.5, weight=0, color="#994444", label="110"]
-              "0x0017880104e45521" [style="rounded, dashed, filled", fillcolor="#fff8ce", fontcolor="#000000", label="{button_double_key|0x0017880104e45521 (6538)|Xiaomi Aqara double key wireless wall switch (WXKG02LM)|9 seconds ago}"];
+              "0x0017880104e45521" [style="rounded, dashed, filled", fillcolor="#fff8ce", fontcolor="#000000", label="{button_double_key|0x0017880104e45521 (0x198a)|Xiaomi Aqara double key wireless wall switch (2016 model) (WXKG02LM_rev1)|9 seconds ago}"];
               "0x0017880104e45521" -> "0x0017880104e45559" [penwidth=1, weight=0, color="#994444", label="130"]
-              "0x0017880104e45525" [style="rounded, filled", fillcolor="#4ea3e0", fontcolor="#ffffff", label="{0x0017880104e45525|0x0017880104e45525 (6536)failed: lqi,routingTable|Boef notSupportedModelID|9 seconds ago}"];
-              "0x0017880104e45559" [style="rounded, filled", fillcolor="#4ea3e0", fontcolor="#ffffff", label="{cc2530_router|0x0017880104e45559 (6540)|Custom devices (DiY) [CC2530 router](http://ptvo.info/cc2530-based-zigbee-coordinator-and-router-112/) (CC2530.ROUTER)|9 seconds ago}"];
+              "0x0017880104e45525" [style="rounded, filled", fillcolor="#4ea3e0", fontcolor="#ffffff", label="{0x0017880104e45525|0x0017880104e45525 (0x1988)failed: lqi,routingTable|Boef notSupportedModelID|9 seconds ago}"];
+              "0x0017880104e45559" [style="rounded, filled", fillcolor="#4ea3e0", fontcolor="#ffffff", label="{cc2530_router|0x0017880104e45559 (0x198c)|Custom devices (DiY) [CC2530 router](http://ptvo.info/cc2530-based-zigbee-coordinator-and-router-112/) (CC2530.ROUTER)|9 seconds ago}"];
               "0x0017880104e45559" -> "0x000b57fffec6a5b2" [penwidth=0.5, weight=0, color="#994444", label="100"]
+              "0x0017880104e45511" [style="rounded, dashed, filled", fillcolor="#fff8ce", fontcolor="#000000", label="{0x0017880104e45511|0x0017880104e45511 (0x045a)|external external (external_converter_device)|9 seconds ago}"];
+              "0x0017880104e45511" -> "0x00124b00120144ae" [penwidth=1, weight=0, color="#994444", label="92"]
             }`;
 
         const expectedLines = expected.split('\n');
@@ -184,10 +177,20 @@ describe('Networkmap', () => {
         const expected = `' paste into: https://www.planttext.com/
 
         @startuml
+        card 0x0017880104e45511 [
+        0x0017880104e45511
+        ---
+        0x0017880104e45511 (0x045a)
+        ---
+        external external (external_converter_device)
+        ---
+        9 seconds ago
+        ]
+
         card 0x0017880104e45525 [
         0x0017880104e45525
         ---
-        0x0017880104e45525 (6536) failed: lqi,routingTable
+        0x0017880104e45525 (0x1988) failed: lqi,routingTable
         ---
         Boef notSupportedModelID
         ---
@@ -197,7 +200,7 @@ describe('Networkmap', () => {
         card 0x000b57fffec6a5b2 [
         bulb
         ---
-        0x000b57fffec6a5b2 (40369)
+        0x000b57fffec6a5b2 (0x9db1)
         ---
         IKEA TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white (LED1545G12)
         ---
@@ -207,7 +210,7 @@ describe('Networkmap', () => {
         card 0x000b57fffec6a5b3 [
         bulb_color
         ---
-        0x000b57fffec6a5b3 (40399)
+        0x000b57fffec6a5b3 (0x9dcf)
         ---
         Philips Hue Go (7146060PH)
         ---
@@ -217,9 +220,9 @@ describe('Networkmap', () => {
         card 0x0017880104e45521 [
         button_double_key
         ---
-        0x0017880104e45521 (6538)
+        0x0017880104e45521 (0x198a)
         ---
-        Xiaomi Aqara double key wireless wall switch (WXKG02LM)
+        Xiaomi Aqara double key wireless wall switch (2016 model) (WXKG02LM_rev1)
         ---
         9 seconds ago
         ]
@@ -227,7 +230,7 @@ describe('Networkmap', () => {
         card 0x0017880104e45559 [
         cc2530_router
         ---
-        0x0017880104e45559 (6540)
+        0x0017880104e45559 (0x198c)
         ---
         Custom devices (DiY) [CC2530 router](http://ptvo.info/cc2530-based-zigbee-coordinator-and-router-112/) (CC2530.ROUTER)
         ---
@@ -237,13 +240,14 @@ describe('Networkmap', () => {
         card 0x00124b00120144ae [
         Coordinator
         ---
-        0x00124b00120144ae (0)
+        0x00124b00120144ae (0x0000)
         ---
         0 seconds ago
         ]
 
         0x000b57fffec6a5b3 --> 0x00124b00120144ae: 120
         0x000b57fffec6a5b2 --> 0x00124b00120144ae: 92
+        0x0017880104e45511 --> 0x00124b00120144ae: 92
         0x000b57fffec6a5b3 --> 0x000b57fffec6a5b2: 110
         0x0017880104e45559 --> 0x000b57fffec6a5b2: 100
         0x0017880104e45521 --> 0x0017880104e45559: 130
@@ -267,35 +271,8 @@ describe('Networkmap', () => {
         let call = MQTT.publish.mock.calls[0];
         expect(call[0]).toStrictEqual('zigbee2mqtt/bridge/response/networkmap');
 
-        const conv = (device) => {return {ieeeAddr: device.ieeeAddr, networkAddress: device.networkAddress}};
-
-        const expected = {
-            status: 'ok',
-            data: {
-                type: 'raw',
-                routes: true,
-                value: {
-                    "nodes":[
-                        {"definition":null,"lastSeen": 1000,"ieeeAddr":coordinator.ieeeAddr,"friendlyName":"Coordinator","type":"Coordinator","networkAddress":0,"modelID":null,"failed":[]},
-                        {"definition":{"description": "TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white","model": "LED1545G12","supports": "on/off, brightness, color temperature","vendor": "IKEA"},"lastSeen": 1000,"ieeeAddr":bulb.ieeeAddr,"friendlyName":"bulb","type":"Router","networkAddress":40369,"modelID":"TRADFRI bulb E27 WS opal 980lm","failed":[]},
-                        {"definition":{"description": "Hue Go","model": "7146060PH","supports": "on/off, brightness, color temperature, color xy, power-on behavior","vendor": "Philips"},"lastSeen": 1000,"ieeeAddr":bulb_color.ieeeAddr,"friendlyName":"bulb_color","type":"Router","networkAddress":40399,"modelID":"LLC020","failed":[]},
-                        {"definition":{"description": "Aqara double key wireless wall switch","model": "WXKG02LM","supports": "left, right, both click (and double, long click for left, right and both depending on model)","vendor": "Xiaomi"},"lastSeen": 1000,"ieeeAddr":WXKG02LM.ieeeAddr,"friendlyName":"button_double_key","type":"EndDevice","networkAddress":6538,"modelID":"lumi.sensor_86sw2.es1"},
-                        {"definition":null,"lastSeen": 1000,"ieeeAddr":unsupported_router.ieeeAddr,"friendlyName":"0x0017880104e45525","type":"Router","networkAddress":6536,"modelID":"notSupportedModelID","manufacturerName": "Boef","failed":['lqi', 'routingTable']},
-                        {"definition":{"description": "[CC2530 router](http://ptvo.info/cc2530-based-zigbee-coordinator-and-router-112/)","model": "CC2530.ROUTER","supports": "state, description, type, rssi","vendor": "Custom devices (DiY)"},"lastSeen": 1000,"ieeeAddr":CC2530_ROUTER.ieeeAddr,"friendlyName":"cc2530_router","type":"Router","networkAddress":6540,"modelID":"lumi.router","failed":[]},
-                    ],
-                    "links":[
-                        {depth: 1, linkquality: 120, routes: [], source: conv(bulb_color), target: conv(coordinator), sourceIeeeAddr: bulb_color.ieeeAddr, sourceNwkAddr: bulb_color.networkAddress, targetIeeeAddr: coordinator.ieeeAddr, lqi: 120, relationship: 2},
-                        {depth: 1, linkquality: 92, routes: [{destinationAddress: CC2530_ROUTER.networkAddress, status: 'ACTIVE', nextHop: bulb.networkAddress}], source: conv(bulb), target: conv(coordinator), sourceIeeeAddr: bulb.ieeeAddr, sourceNwkAddr: bulb.networkAddress, targetIeeeAddr: coordinator.ieeeAddr, lqi: 92, relationship: 2},
-                        {depth: 2, linkquality: 110, routes: [], source: conv(bulb_color), target: conv(bulb), sourceIeeeAddr: bulb_color.ieeeAddr, sourceNwkAddr: bulb_color.networkAddress, targetIeeeAddr: bulb.ieeeAddr, lqi: 110, relationship: 1},
-                        {depth: 2, linkquality: 100, routes: [], source: conv(CC2530_ROUTER), target: conv(bulb), sourceIeeeAddr: CC2530_ROUTER.ieeeAddr, sourceNwkAddr: CC2530_ROUTER.networkAddress, targetIeeeAddr: bulb.ieeeAddr, lqi: 100, relationship: 1},
-                        {depth: 2, linkquality: 130, routes: [], source: conv(WXKG02LM), target: conv(CC2530_ROUTER), sourceIeeeAddr: WXKG02LM.ieeeAddr, sourceNwkAddr: WXKG02LM.networkAddress, targetIeeeAddr: CC2530_ROUTER.ieeeAddr, lqi: 130, relationship: 1}
-                    ]
-                }
-            }
-        };
-
+        const expected = {"data":{"routes":true,"type":"raw","value":{"links":[{"depth":1,"linkquality":120,"lqi":120,"relationship":2,"routes":[],"source":{"ieeeAddr":"0x000b57fffec6a5b3","networkAddress":40399},"sourceIeeeAddr":"0x000b57fffec6a5b3","sourceNwkAddr":40399,"target":{"ieeeAddr":"0x00124b00120144ae","networkAddress":0},"targetIeeeAddr":"0x00124b00120144ae"},{"depth":1,"linkquality":92,"lqi":92,"relationship":2,"routes":[{"destinationAddress":6540,"nextHop":40369,"status":"ACTIVE"}],"source":{"ieeeAddr":"0x000b57fffec6a5b2","networkAddress":40369},"sourceIeeeAddr":"0x000b57fffec6a5b2","sourceNwkAddr":40369,"target":{"ieeeAddr":"0x00124b00120144ae","networkAddress":0},"targetIeeeAddr":"0x00124b00120144ae"},{"depth":1,"linkquality":92,"lqi":92,"relationship":2,"routes":[],"source":{"ieeeAddr":"0x0017880104e45511","networkAddress":1114},"sourceIeeeAddr":"0x0017880104e45511","sourceNwkAddr":1114,"target":{"ieeeAddr":"0x00124b00120144ae","networkAddress":0},"targetIeeeAddr":"0x00124b00120144ae"},{"depth":2,"linkquality":110,"lqi":110,"relationship":1,"routes":[],"source":{"ieeeAddr":"0x000b57fffec6a5b3","networkAddress":40399},"sourceIeeeAddr":"0x000b57fffec6a5b3","sourceNwkAddr":40399,"target":{"ieeeAddr":"0x000b57fffec6a5b2","networkAddress":40369},"targetIeeeAddr":"0x000b57fffec6a5b2"},{"depth":2,"linkquality":100,"lqi":100,"relationship":1,"routes":[],"source":{"ieeeAddr":"0x0017880104e45559","networkAddress":6540},"sourceIeeeAddr":"0x0017880104e45559","sourceNwkAddr":6540,"target":{"ieeeAddr":"0x000b57fffec6a5b2","networkAddress":40369},"targetIeeeAddr":"0x000b57fffec6a5b2"},{"depth":2,"linkquality":130,"lqi":130,"relationship":1,"routes":[],"source":{"ieeeAddr":"0x0017880104e45521","networkAddress":6538},"sourceIeeeAddr":"0x0017880104e45521","sourceNwkAddr":6538,"target":{"ieeeAddr":"0x0017880104e45559","networkAddress":6540},"targetIeeeAddr":"0x0017880104e45559"}],"nodes":[{"definition":null,"failed":[],"friendlyName":"Coordinator","ieeeAddr":"0x00124b00120144ae","lastSeen":1000,"modelID":null,"networkAddress":0,"type":"Coordinator"},{"definition":{"description":"TRADFRI LED bulb E26/E27 980 lumen, dimmable, white spectrum, opal white","model":"LED1545G12","supports":"light (state, brightness, color_temp, color_temp_startup), effect, power_on_behavior, linkquality","vendor":"IKEA"},"failed":[],"friendlyName":"bulb","ieeeAddr":"0x000b57fffec6a5b2","lastSeen":1000,"modelID":"TRADFRI bulb E27 WS opal 980lm","networkAddress":40369,"type":"Router"},{"definition":{"description":"Hue Go","model":"7146060PH","supports":"light (state, brightness, color_temp, color_temp_startup, color_xy, color_hs), effect, linkquality","vendor":"Philips"},"failed":[],"friendlyName":"bulb_color","ieeeAddr":"0x000b57fffec6a5b3","lastSeen":1000,"modelID":"LLC020","networkAddress":40399,"type":"Router"},{"definition":{"description":"Aqara double key wireless wall switch (2016 model)","model":"WXKG02LM_rev1","supports":"battery, action, voltage, linkquality","vendor":"Xiaomi"},"friendlyName":"button_double_key","ieeeAddr":"0x0017880104e45521","lastSeen":1000,"modelID":"lumi.sensor_86sw2.es1","networkAddress":6538,"type":"EndDevice"},{"definition":null,"failed":["lqi","routingTable"],"friendlyName":"0x0017880104e45525","ieeeAddr":"0x0017880104e45525","lastSeen":1000,"manufacturerName":"Boef","modelID":"notSupportedModelID","networkAddress":6536,"type":"Router"},{"definition":{"description":"[CC2530 router](http://ptvo.info/cc2530-based-zigbee-coordinator-and-router-112/)","model":"CC2530.ROUTER","supports":"led, linkquality","vendor":"Custom devices (DiY)"},"failed":[],"friendlyName":"cc2530_router","ieeeAddr":"0x0017880104e45559","lastSeen":1000,"modelID":"lumi.router","networkAddress":6540,"type":"Router"},{"definition":{"description":"external","model":"external_converter_device","supports":"linkquality","vendor":"external"},"friendlyName":"0x0017880104e45511","ieeeAddr":"0x0017880104e45511","lastSeen":1000,"modelID":"external_converter_device","networkAddress":1114,"type":"EndDevice"}]}},"status":"ok"};
         const actual = JSON.parse(call[1]);
-        actual.data.value = JSON.parse(actual.data.value);
         expect(actual).toStrictEqual(expected);
     });
 
