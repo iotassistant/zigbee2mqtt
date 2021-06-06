@@ -54,6 +54,7 @@ describe('HomeAssistant extension', () => {
         payload = {
             'unit_of_measurement': '°C',
             'device_class': 'temperature',
+            'state_class': 'measurement',
             'value_template': '{{ value_json.temperature }}',
             'state_topic': 'zigbee2mqtt/weather_sensor',
             'json_attributes_topic': 'zigbee2mqtt/weather_sensor',
@@ -79,6 +80,7 @@ describe('HomeAssistant extension', () => {
         payload = {
             'unit_of_measurement': '%',
             'device_class': 'humidity',
+            'state_class': 'measurement',
             'value_template': '{{ value_json.humidity }}',
             'state_topic': 'zigbee2mqtt/weather_sensor',
             'json_attributes_topic': 'zigbee2mqtt/weather_sensor',
@@ -104,6 +106,7 @@ describe('HomeAssistant extension', () => {
         payload = {
             'unit_of_measurement': 'hPa',
             'device_class': 'pressure',
+            'state_class': 'measurement',
             'value_template': '{{ value_json.pressure }}',
             'state_topic': 'zigbee2mqtt/weather_sensor',
             'json_attributes_topic': 'zigbee2mqtt/weather_sensor',
@@ -129,6 +132,7 @@ describe('HomeAssistant extension', () => {
         payload = {
             'unit_of_measurement': '%',
             'device_class': 'battery',
+            'state_class': 'measurement',
             'value_template': '{{ value_json.battery }}',
             'state_topic': 'zigbee2mqtt/weather_sensor',
             'json_attributes_topic': 'zigbee2mqtt/weather_sensor',
@@ -153,7 +157,9 @@ describe('HomeAssistant extension', () => {
 
         payload = {
             'icon': 'mdi:signal',
+            'enabled_by_default': false,
             'unit_of_measurement': 'lqi',
+            'state_class': 'measurement',
             'value_template': '{{ value_json.linkquality }}',
             'state_topic': 'zigbee2mqtt/weather_sensor',
             'json_attributes_topic': 'zigbee2mqtt/weather_sensor',
@@ -304,6 +310,7 @@ describe('HomeAssistant extension', () => {
         payload = {
             'unit_of_measurement': '°C',
             'device_class': 'temperature',
+            'state_class': 'measurement',
             'value_template': "{{ value_json.temperature }}",
             'state_topic': 'zigbee2mqtt/weather_sensor',
             'json_attributes_topic': 'zigbee2mqtt/weather_sensor',
@@ -329,6 +336,7 @@ describe('HomeAssistant extension', () => {
         payload = {
             'unit_of_measurement': '%',
             'device_class': 'humidity',
+            'state_class': 'measurement',
             'value_template': '{{ value_json.humidity }}',
             'state_topic': 'zigbee2mqtt/weather_sensor',
             'json_attributes_topic': 'zigbee2mqtt/weather_sensor',
@@ -354,6 +362,7 @@ describe('HomeAssistant extension', () => {
         payload = {
             'unit_of_measurement': 'hPa',
             'device_class': 'pressure',
+            'state_class': 'measurement',
             'value_template': '{{ value_json.pressure }}',
             'state_topic': 'zigbee2mqtt/weather_sensor',
             'json_attributes_topic': 'zigbee2mqtt/weather_sensor',
@@ -410,6 +419,7 @@ describe('HomeAssistant extension', () => {
         payload = {
             'unit_of_measurement': '°C',
             'device_class': 'temperature',
+            'state_class': 'measurement',
             'value_template': '{{ value_json.temperature }}',
             'state_topic': 'zigbee2mqtt/weather_sensor',
             'json_attributes_topic': 'zigbee2mqtt/weather_sensor',
@@ -437,6 +447,7 @@ describe('HomeAssistant extension', () => {
         payload = {
             'unit_of_measurement': '%',
             'device_class': 'humidity',
+            'state_class': 'measurement',
             'value_template': '{{ value_json.humidity }}',
             'state_topic': 'zigbee2mqtt/weather_sensor',
             'json_attributes_topic': 'zigbee2mqtt/weather_sensor',
@@ -698,6 +709,7 @@ describe('HomeAssistant extension', () => {
         payload = {
             'unit_of_measurement': '°C',
             'device_class': 'temperature',
+            'state_class': 'measurement',
             'value_template': '{{ value_json.temperature }}',
             'state_topic': 'zigbee2mqtt/weather_sensor',
             'json_attributes_topic': 'zigbee2mqtt/weather_sensor',
@@ -840,6 +852,7 @@ describe('HomeAssistant extension', () => {
         const payloadHA = {
             'unit_of_measurement': '°C',
             'device_class': 'temperature',
+            'state_class': 'measurement',
             'value_template': '{{ value_json.temperature }}',
             'state_topic': 'zigbee2mqtt/weather_sensor',
             'json_attributes_topic': 'zigbee2mqtt/weather_sensor',
@@ -966,6 +979,7 @@ describe('HomeAssistant extension', () => {
         payload = {
             'unit_of_measurement': '°C',
             'device_class': 'temperature',
+            'state_class': 'measurement',
             'value_template': '{{ value_json.temperature }}',
             'state_topic': 'zigbee2mqtt/weather_sensor',
             'json_attributes_topic': 'zigbee2mqtt/weather_sensor',
@@ -1052,6 +1066,7 @@ describe('HomeAssistant extension', () => {
         const payload = {
             'unit_of_measurement': '°C',
             'device_class': 'temperature',
+            'state_class': 'measurement',
             'value_template': '{{ value_json.temperature }}',
             'state_topic': 'zigbee2mqtt/weather_sensor_renamed',
             'json_attributes_topic': 'zigbee2mqtt/weather_sensor_renamed',
@@ -1122,6 +1137,7 @@ describe('HomeAssistant extension', () => {
         const payload = {
             'unit_of_measurement': '°C',
             'device_class': 'temperature',
+            'state_class': 'measurement',
             'value_template': '{{ value_json.temperature }}',
             'state_topic': 'zigbee2mqtt/weather_sensor_renamed',
             'json_attributes_topic': 'zigbee2mqtt/weather_sensor_renamed',
@@ -1153,6 +1169,7 @@ describe('HomeAssistant extension', () => {
             "payload_on":true,
             "payload_off":false,
             "value_template":"{{ value_json.update_available}}",
+            "enabled_by_default": false,
             "state_topic":"zigbee2mqtt/bulb",
             "json_attributes_topic":"zigbee2mqtt/bulb",
             "name":"bulb update available",
